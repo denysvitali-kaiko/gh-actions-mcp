@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -28,10 +27,10 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("log_level", "info")
 	v.SetDefault("token", "")
 
-	// Environment variables
-	v.SetEnvPrefix("GH")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
+	// Environment variables - bind GITHUB_TOKEN explicitly
+	v.BindEnv("token", "GITHUB_TOKEN")
+	v.BindEnv("repo_owner", "GH_REPO_OWNER")
+	v.BindEnv("repo_name", "GH_REPO_NAME")
 
 	// Config file
 	if configPath != "" {

@@ -47,11 +47,11 @@ repo_name: file-repo
 	require.NoError(t, err)
 
 	// Set environment variables
-	os.Setenv("GH_TOKEN", "env-token")
+	os.Setenv("GITHUB_TOKEN", "env-token")
 	os.Setenv("GH_REPO_OWNER", "env-owner")
 	os.Setenv("GH_REPO_NAME", "env-repo")
 	defer func() {
-		os.Unsetenv("GH_TOKEN")
+		os.Unsetenv("GITHUB_TOKEN")
 		os.Unsetenv("GH_REPO_OWNER")
 		os.Unsetenv("GH_REPO_NAME")
 	}()
