@@ -1,0 +1,14 @@
+# GitHub Actions MCP Server Configuration
+# Copy this file to config.yaml and fill in your values
+
+# GitHub token (can also be set via GITHUB_TOKEN environment variable)
+token: your_github_token_here
+
+# Repository owner (e.g., "yourusername" or "yourorganization")
+repo_owner: owner
+
+# Repository name (e.g., "myrepo")
+repo_name: repo
+
+# Log level: debug, info, warn, error
+log_level: info
