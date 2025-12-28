@@ -1,11 +1,16 @@
 package github
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/go-github/v69/github"
 	"github.com/sirupsen/logrus"
@@ -56,6 +61,24 @@ type Workflow struct {
 	State string `json:"state"`
 }
 
+// workflowRunFromGitHub converts a github.WorkflowRun to our WorkflowRun type
+func workflowRunFromGitHub(run *github.WorkflowRun) *WorkflowRun {
+	return &WorkflowRun{
+		ID:         run.GetID(),
+		Name:       run.GetName(),
+		Status:     run.GetStatus(),
+		Conclusion: run.GetConclusion(),
+		Branch:     run.GetHeadBranch(),
+		Event:      run.GetEvent(),
+		Actor:      run.GetActor().GetLogin(),
+		CreatedAt:  run.GetCreatedAt().String(),
+		UpdatedAt:  run.GetUpdatedAt().String(),
+		URL:        run.GetHTMLURL(),
+		RunNumber:  run.GetRunNumber(),
+		WorkflowID: run.GetWorkflowID(),
+	}
+}
+
 type ActionsStatus struct {
 	TotalWorkflows   int            `json:"total_workflows"`
 	TotalRuns        int            `json:"total_runs"`
@@ -87,20 +110,7 @@ func (c *Client) GetActionsStatus(ctx context.Context, limit int) (*ActionsStatu
 	status.TotalRuns = runs.GetTotalCount()
 
 	for _, run := range runs.WorkflowRuns {
-		wr := &WorkflowRun{
-			ID:         run.GetID(),
-			Name:       run.GetName(),
-			Status:     run.GetStatus(),
-			Conclusion: run.GetConclusion(),
-			Branch:     run.GetHeadBranch(),
-			Event:      run.GetEvent(),
-			Actor:      run.GetActor().GetLogin(),
-			CreatedAt:  run.GetCreatedAt().String(),
-			UpdatedAt:  run.GetUpdatedAt().String(),
-			URL:        run.GetHTMLURL(),
-			RunNumber:  run.GetRunNumber(),
-			WorkflowID: run.GetWorkflowID(),
-		}
+		wr := workflowRunFromGitHub(run)
 		status.RecentRuns = append(status.RecentRuns, wr)
 
 		switch wr.Conclusion {
@@ -126,6 +136,15 @@ func (c *Client) GetActionsStatus(ctx context.Context, limit int) (*ActionsStatu
 	return status, nil
 }
 
+func (c *Client) GetWorkflowRun(ctx context.Context, runID int64) (*WorkflowRun, error) {
+	run, _, err := c.gh.Actions.GetWorkflowRunByID(ctx, c.owner, c.repo, runID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workflow run %d: %w", runID, err)
+	}
+
+	return workflowRunFromGitHub(run), nil
+}
+
 func (c *Client) GetWorkflowRuns(ctx context.Context, workflowID int64) ([]*WorkflowRun, error) {
 	runs, _, err := c.gh.Actions.ListWorkflowRunsByID(ctx, c.owner, c.repo, workflowID, &github.ListWorkflowRunsOptions{
 		ListOptions: github.ListOptions{PerPage: 50},
@@ -136,21 +155,7 @@ func (c *Client) GetWorkflowRuns(ctx context.Context, workflowID int64) ([]*Work
 
 	result := make([]*WorkflowRun, 0, len(runs.WorkflowRuns))
 	for _, run := range runs.WorkflowRuns {
-		wr := &WorkflowRun{
-			ID:         run.GetID(),
-			Name:       run.GetName(),
-			Status:     run.GetStatus(),
-			Conclusion: run.GetConclusion(),
-			Branch:     run.GetHeadBranch(),
-			Event:      run.GetEvent(),
-			Actor:      run.GetActor().GetLogin(),
-			CreatedAt:  run.GetCreatedAt().String(),
-			UpdatedAt:  run.GetUpdatedAt().String(),
-			URL:        run.GetHTMLURL(),
-			RunNumber:  run.GetRunNumber(),
-			WorkflowID: run.GetWorkflowID(),
-		}
-		result = append(result, wr)
+		result = append(result, workflowRunFromGitHub(run))
 	}
 
 	return result, nil
@@ -222,6 +227,193 @@ func (c *Client) RerunWorkflowRun(ctx context.Context, runID int64) error {
 		return fmt.Errorf("failed to rerun workflow run %d: %w", runID, err)
 	}
 	return nil
+}
+
+// GetWorkflowLogs retrieves the logs for a workflow run and returns them as a string.
+// The logs can be limited by line count using head or tail parameters.
+// If both are specified, tail takes precedence.
+func (c *Client) GetWorkflowLogs(ctx context.Context, runID int64, head, tail int) (string, error) {
+	// Get the log archive (GitHub returns a redirect to a ZIP file)
+	url, resp, err := c.gh.Actions.GetWorkflowRunLogs(ctx, c.owner, c.repo, runID, 10)
+	if err != nil {
+		return "", fmt.Errorf("failed to get workflow log URL for run %d: %w", runID, err)
+	}
+
+	// If we got a URL, fetch the ZIP file from it
+	zipURL := url
+	if resp != nil && resp.StatusCode != 0 {
+		// The go-github library follows redirects automatically, so if we get here
+		// with a non-zero status, something went wrong
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusFound {
+			return "", fmt.Errorf("failed to get workflow logs: HTTP %d", resp.StatusCode)
+		}
+	}
+
+	// Fetch the ZIP file
+	zipResp, err := c.gh.Client().Get(zipURL.String())
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch workflow logs for run %d: %w", runID, err)
+	}
+	defer zipResp.Body.Close()
+
+	if zipResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to fetch workflow logs: HTTP %d", zipResp.StatusCode)
+	}
+
+	// Read the ZIP data
+	zipData, err := io.ReadAll(zipResp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read workflow logs for run %d: %w", runID, err)
+	}
+
+	// Open the ZIP archive
+	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+	if err != nil {
+		return "", fmt.Errorf("failed to open log archive for run %d: %w", runID, err)
+	}
+
+	// Collect all log files and sort them by name for consistent output
+	type logFile struct {
+		name string
+		data string
+	}
+	var logFiles []logFile
+
+	for _, file := range zipReader.File {
+		// Skip directories and files in subdirectories (like __cacache__
+		if file.FileInfo().IsDir() {
+			continue
+		}
+
+		// Read the file content
+		rc, err := file.Open()
+		if err != nil {
+			log.Debugf("Warning: could not open %s in log archive: %v", file.Name, err)
+			continue
+		}
+
+		content, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			log.Debugf("Warning: could not read %s in log archive: %v", file.Name, err)
+			continue
+		}
+
+		logFiles = append(logFiles, logFile{
+			name: file.Name,
+			data: string(content),
+		})
+	}
+
+	// Sort by filename for consistent output
+	sort.Slice(logFiles, func(i, j int) bool {
+		return logFiles[i].name < logFiles[j].name
+	})
+
+	// Combine all logs into a single string with headers
+	var allLogs strings.Builder
+	for _, lf := range logFiles {
+		// Add a header for each file
+		allLogs.WriteString(fmt.Sprintf("=== %s ===\n", lf.name))
+		allLogs.WriteString(lf.data)
+		// Add newline if the file doesn't end with one
+		if !strings.HasSuffix(lf.data, "\n") {
+			allLogs.WriteString("\n")
+		}
+	}
+
+	logStr := strings.TrimRight(allLogs.String(), "\n")
+
+	// Apply line limiting
+	if tail > 0 {
+		lines := strings.Split(logStr, "\n")
+		if len(lines) > tail {
+			lines = lines[len(lines)-tail:]
+			logStr = strings.Join(lines, "\n") + "\n"
+		} else {
+			logStr = logStr + "\n"
+		}
+	} else if head > 0 {
+		lines := strings.Split(logStr, "\n")
+		if len(lines) > head {
+			lines = lines[:head]
+			logStr = strings.Join(lines, "\n") + "\n"
+		} else {
+			logStr = logStr + "\n"
+		}
+	} else {
+		logStr = logStr + "\n"
+	}
+
+	return logStr, nil
+}
+
+type WaitResult struct {
+	Run        *WorkflowRun
+	TimedOut   bool
+	Elapsed    time.Duration
+	PollCount  int
+}
+
+// WaitForWorkflowRun polls a workflow run until it completes (success, failure, cancelled, etc.)
+// pollInterval is the time between polls in seconds
+// maxWait is the maximum time to wait in seconds (0 for no limit)
+func (c *Client) WaitForWorkflowRun(ctx context.Context, runID int64, pollInterval int, maxWait int) (*WaitResult, error) {
+	const defaultPollInterval = 5
+	const defaultMaxWait = 600 // 10 minutes
+
+	if pollInterval <= 0 {
+		pollInterval = defaultPollInterval
+	}
+	if maxWait <= 0 {
+		maxWait = defaultMaxWait
+	}
+
+	pollDuration := time.Duration(pollInterval) * time.Second
+	maxDuration := time.Duration(maxWait) * time.Second
+	startTime := time.Now()
+
+	result := &WaitResult{}
+
+	for {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return result, ctx.Err()
+		default:
+		}
+
+		// Check timeout
+		if maxDuration > 0 && time.Since(startTime) > maxDuration {
+			result.TimedOut = true
+			result.Elapsed = time.Since(startTime)
+			return result, fmt.Errorf("workflow run %d did not complete within %d seconds", runID, maxWait)
+		}
+
+		// Get current status
+		run, err := c.GetWorkflowRun(ctx, runID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get workflow run %d: %w", runID, err)
+		}
+		result.Run = run
+		result.PollCount++
+
+		// Check if completed
+		if run.Status == "completed" {
+			return result, nil
+		}
+
+		log.Debugf("Workflow run %d status: %s (polling in %v)", runID, run.Status, pollDuration)
+
+		// Wait before next poll
+		timer := time.NewTimer(pollDuration)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return result, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 func (c *Client) GetRepoInfo() (string, string) {
