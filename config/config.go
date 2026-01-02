@@ -9,10 +9,12 @@ import (
 )
 
 type Config struct {
-	Token     string `mapstructure:"token"`
-	RepoOwner string `mapstructure:"repo_owner"`
-	RepoName  string `mapstructure:"repo_name"`
-	LogLevel  string `mapstructure:"log_level"`
+	Token         string `mapstructure:"token"`
+	RepoOwner     string `mapstructure:"repo_owner"`
+	RepoName      string `mapstructure:"repo_name"`
+	LogLevel      string `mapstructure:"log_level"`
+	DefaultLimit  int    `mapstructure:"default_limit"`
+	DefaultLogLen int    `mapstructure:"default_log_len"`
 }
 
 var log = logrus.New()
@@ -27,6 +29,8 @@ func Load(configPath string) (*Config, error) {
 	// Set defaults
 	v.SetDefault("log_level", "info")
 	v.SetDefault("token", "")
+	v.SetDefault("default_limit", 10)
+	v.SetDefault("default_log_len", 100)
 
 	// Environment variables - bind GITHUB_TOKEN explicitly
 	v.BindEnv("token", "GITHUB_TOKEN")

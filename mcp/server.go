@@ -21,7 +21,29 @@ type MCPServer struct {
 	log    *logrus.Logger
 }
 
+// Default limits for output control
+const (
+	DefaultListLimit = 10  // Default max items for lists
+	DefaultLogLines  = 100 // Default max lines for logs
+)
+
 // Helper functions to reduce repetition
+
+// getLimit returns the limit from config or default
+func (s *MCPServer) getLimit() int {
+	if s.config.DefaultLimit > 0 {
+		return s.config.DefaultLimit
+	}
+	return DefaultListLimit
+}
+
+// getLogLimit returns the log limit from config or default
+func (s *MCPServer) getLogLimit() int {
+	if s.config.DefaultLogLen > 0 {
+		return s.config.DefaultLogLen
+	}
+	return DefaultLogLines
+}
 
 // formatAuthError formats an error message with authentication context
 func (s *MCPServer) formatAuthError(err error, msg string) string {
@@ -95,6 +117,10 @@ func (s *MCPServer) registerTools() {
 	// Tool: list_workflows
 	s.srv.AddTool(mcp.NewTool("list_workflows",
 		mcp.WithDescription("List all workflows available in the repository"),
+		mcp.WithNumber("limit",
+			mcp.Description("Maximum number of workflows to return (default: 10)"),
+			mcp.DefaultNumber(10),
+		),
 	), s.listWorkflows)
 
 	// Tool: get_workflow_runs
@@ -176,7 +202,7 @@ func (s *MCPServer) registerTools() {
 
 func (s *MCPServer) getActionsStatus(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	ctx := context.Background()
-	limit := 10
+	limit := s.getLimit()
 
 	if l, ok := arguments["limit"]; ok {
 		if n, err := strconv.Atoi(fmt.Sprintf("%.0f", l)); err == nil {
@@ -196,20 +222,36 @@ func (s *MCPServer) getActionsStatus(arguments map[string]interface{}) (*mcp.Cal
 
 func (s *MCPServer) listWorkflows(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	ctx := context.Background()
+	limit := s.getLimit()
 
-	s.log.Infof("Listing workflows for %s/%s", s.config.RepoOwner, s.config.RepoName)
+	if l, ok := arguments["limit"]; ok {
+		if n, err := strconv.Atoi(fmt.Sprintf("%.0f", l)); err == nil {
+			limit = n
+		}
+	}
+
+	s.log.Infof("Listing workflows for %s/%s (limit: %d)", s.config.RepoOwner, s.config.RepoName, limit)
 
 	workflows, err := s.client.GetWorkflows(ctx)
 	if err != nil {
 		return errorResult(s.formatAuthError(err, "failed to list workflows")), nil
 	}
 
-	return jsonResult(workflows)
+	// Apply limit
+	result := workflows[:0]
+	for _, w := range workflows {
+		if len(result) >= limit {
+			break
+		}
+		result = append(result, w)
+	}
+
+	return jsonResult(result)
 }
 
 func (s *MCPServer) getWorkflowRuns(arguments map[string]interface{}) (*mcp.CallToolResult, error) {
 	ctx := context.Background()
-	limit := 10
+	limit := s.getLimit()
 
 	workflowID, ok := arguments["workflow_id"].(string)
 	if !ok || workflowID == "" {
@@ -390,6 +432,9 @@ func (s *MCPServer) getWorkflowLogs(arguments map[string]interface{}) (*mcp.Call
 	tail := 0
 	if t, ok := arguments["tail"].(float64); ok && t > 0 {
 		tail = int(t)
+	} else if head == 0 {
+		// Apply default log limit when neither head nor tail is specified
+		tail = s.getLogLimit()
 	}
 
 	s.log.Infof("Getting workflow logs for run %d on %s/%s (head: %d, tail: %d)",
