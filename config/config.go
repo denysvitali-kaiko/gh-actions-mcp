@@ -34,9 +34,9 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("default_log_len", 100)
 
 	// Environment variables - bind GITHUB_TOKEN explicitly
-	v.BindEnv("token", "GITHUB_TOKEN")
-	v.BindEnv("repo_owner", "GH_REPO_OWNER")
-	v.BindEnv("repo_name", "GH_REPO_NAME")
+	_ = v.BindEnv("token", "GITHUB_TOKEN")
+	_ = v.BindEnv("repo_owner", "GH_REPO_OWNER")
+	_ = v.BindEnv("repo_name", "GH_REPO_NAME")
 
 	// Config file
 	if configPath != "" {
