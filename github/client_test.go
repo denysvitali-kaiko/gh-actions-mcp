@@ -11,37 +11,37 @@ import (
 
 func TestInferRepoFromOrigin_HTTPS(t *testing.T) {
 	tests := []struct {
-		name     string
-		url      string
+		name      string
+		url       string
 		wantOwner string
 		wantRepo  string
 		wantErr   bool
 	}{
 		{
-			name:     "HTTPS URL",
-			url:      "https://github.com/owner/repo.git",
+			name:      "HTTPS URL",
+			url:       "https://github.com/owner/repo.git",
 			wantOwner: "owner",
 			wantRepo:  "repo",
 			wantErr:   false,
 		},
 		{
-			name:     "HTTPS URL without .git",
-			url:      "https://github.com/owner/repo",
+			name:      "HTTPS URL without .git",
+			url:       "https://github.com/owner/repo",
 			wantOwner: "owner",
 			wantRepo:  "repo",
 			wantErr:   false,
 		},
 		{
-			name:     "HTTP URL",
-			url:      "http://github.com/owner/repo.git",
+			name:      "HTTP URL",
+			url:       "http://github.com/owner/repo.git",
 			wantOwner: "owner",
 			wantRepo:  "repo",
 			wantErr:   false,
 		},
 		// Note: Non-github.com URLs will fail as expected
 		{
-			name:     "Non-GitHub URL fails",
-			url:      "https://github.mycompany.com/owner/repo.git",
+			name:      "Non-GitHub URL fails",
+			url:       "https://github.mycompany.com/owner/repo.git",
 			wantOwner: "",
 			wantRepo:  "",
 			wantErr:   true,
@@ -64,29 +64,29 @@ func TestInferRepoFromOrigin_HTTPS(t *testing.T) {
 
 func TestInferRepoFromOrigin_SSH(t *testing.T) {
 	tests := []struct {
-		name     string
-		url      string
+		name      string
+		url       string
 		wantOwner string
 		wantRepo  string
 		wantErr   bool
 	}{
 		{
-			name:     "SSH URL",
-			url:      "git@github.com:owner/repo.git",
+			name:      "SSH URL",
+			url:       "git@github.com:owner/repo.git",
 			wantOwner: "owner",
 			wantRepo:  "repo",
 			wantErr:   false,
 		},
 		{
-			name:     "SSH URL without .git",
-			url:      "git@github.com:owner/repo",
+			name:      "SSH URL without .git",
+			url:       "git@github.com:owner/repo",
 			wantOwner: "owner",
 			wantRepo:  "repo",
 			wantErr:   false,
 		},
 		{
-			name:     "SSH enterprise URL",
-			url:      "git@github.mycompany.com:owner/repo.git",
+			name:      "SSH enterprise URL",
+			url:       "git@github.mycompany.com:owner/repo.git",
 			wantOwner: "owner",
 			wantRepo:  "repo",
 			wantErr:   false,

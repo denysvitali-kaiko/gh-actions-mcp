@@ -79,13 +79,13 @@ func TestWorkflowRunJSON(t *testing.T) {
 
 func TestActionsStatusJSON(t *testing.T) {
 	status := &github.ActionsStatus{
-		TotalWorkflows:   5,
-		TotalRuns:        100,
-		SuccessfulRuns:   80,
-		FailedRuns:       15,
-		InProgressRuns:   2,
-		QueuedRuns:       1,
-		PendingRuns:      2,
+		TotalWorkflows: 5,
+		TotalRuns:      100,
+		SuccessfulRuns: 80,
+		FailedRuns:     15,
+		InProgressRuns: 2,
+		QueuedRuns:     1,
+		PendingRuns:    2,
 		RecentRuns: []*github.WorkflowRun{
 			{ID: 1, Name: "CI"},
 		},
@@ -270,9 +270,9 @@ func TestGetActionsStatusWithMockData(t *testing.T) {
 // Test workflow ID parsing
 func TestWorkflowIDParsing(t *testing.T) {
 	testCases := []struct {
-		input    string
-		wantID   int64
-		wantErr  bool
+		input   string
+		wantID  int64
+		wantErr bool
 	}{
 		{"12345", 12345, false},
 		{"0", 0, false},

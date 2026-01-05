@@ -40,18 +40,18 @@ func NewClient(token, owner, repo string) *Client {
 }
 
 type WorkflowRun struct {
-	ID         int64    `json:"id"`
-	Name       string   `json:"name"`
-	Status     string   `json:"status"`
-	Conclusion string   `json:"conclusion"`
-	Branch     string   `json:"branch"`
-	Event      string   `json:"event"`
-	Actor      string   `json:"actor"`
-	CreatedAt  string   `json:"created_at"`
-	UpdatedAt  string   `json:"updated_at"`
-	URL        string   `json:"url"`
-	RunNumber  int      `json:"run_number"`
-	WorkflowID int64    `json:"workflow_id"`
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	Branch     string `json:"branch"`
+	Event      string `json:"event"`
+	Actor      string `json:"actor"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
+	URL        string `json:"url"`
+	RunNumber  int    `json:"run_number"`
+	WorkflowID int64  `json:"workflow_id"`
 }
 
 type Workflow struct {
@@ -80,14 +80,14 @@ func workflowRunFromGitHub(run *github.WorkflowRun) *WorkflowRun {
 }
 
 type ActionsStatus struct {
-	TotalWorkflows   int            `json:"total_workflows"`
-	TotalRuns        int            `json:"total_runs"`
-	RecentRuns       []*WorkflowRun `json:"recent_runs"`
-	SuccessfulRuns   int            `json:"successful_runs"`
-	FailedRuns       int            `json:"failed_runs"`
-	InProgressRuns   int            `json:"in_progress_runs"`
-	QueuedRuns       int            `json:"queued_runs"`
-	PendingRuns      int            `json:"pending_runs"`
+	TotalWorkflows int            `json:"total_workflows"`
+	TotalRuns      int            `json:"total_runs"`
+	RecentRuns     []*WorkflowRun `json:"recent_runs"`
+	SuccessfulRuns int            `json:"successful_runs"`
+	FailedRuns     int            `json:"failed_runs"`
+	InProgressRuns int            `json:"in_progress_runs"`
+	QueuedRuns     int            `json:"queued_runs"`
+	PendingRuns    int            `json:"pending_runs"`
 }
 
 func (c *Client) GetActionsStatus(ctx context.Context, limit int) (*ActionsStatus, error) {
@@ -349,10 +349,10 @@ func (c *Client) GetWorkflowLogs(ctx context.Context, runID int64, head, tail in
 }
 
 type WaitResult struct {
-	Run        *WorkflowRun
-	TimedOut   bool
-	Elapsed    time.Duration
-	PollCount  int
+	Run       *WorkflowRun
+	TimedOut  bool
+	Elapsed   time.Duration
+	PollCount int
 }
 
 // WaitForWorkflowRun polls a workflow run until it completes (success, failure, cancelled, etc.)
