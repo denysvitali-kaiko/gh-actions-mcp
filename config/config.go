@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -86,12 +87,24 @@ func getTokenFromGHCLI() (string, error) {
 
 func (c *Config) Validate() error {
 	if c.Token == "" {
+		// Try to get token from macOS keychain (only on macOS)
+		if runtime.GOOS == "darwin" {
+			if token, err := getTokenFromKeychain(); err == nil {
+				c.Token = token
+				log.Infof("Obtained GitHub token from macOS keychain")
+			} else {
+				log.Debugf("Could not get token from keychain: %v", err)
+			}
+		}
+
 		// Try to get token from gh CLI
-		if token, err := getTokenFromGHCLI(); err == nil {
-			c.Token = token
-			log.Infof("Obtained GitHub token from gh CLI")
-		} else {
-			log.Warnf("Could not get token from gh CLI: %v", err)
+		if c.Token == "" {
+			if token, err := getTokenFromGHCLI(); err == nil {
+				c.Token = token
+				log.Infof("Obtained GitHub token from gh CLI")
+			} else {
+				log.Warnf("Could not get token from gh CLI: %v", err)
+			}
 		}
 	}
 
